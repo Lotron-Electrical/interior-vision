@@ -158,20 +158,22 @@ export default function VideoExplorer({
       }
     }
 
-    // Step 3: Encode frames into a video using canvas + MediaRecorder
+    // Step 3: Encode frames into a smooth video with crossfade transitions at 30fps
     setProcessing({ phase: 'encoding' });
 
     try {
-      const firstImg = await loadImage(restyledFrames[0]);
+      const OUTPUT_FPS = 30;
+      const images = await Promise.all(restyledFrames.map(loadImage));
+      const firstImg = images[0];
       const encodeCanvas = document.createElement('canvas');
       encodeCanvas.width = firstImg.naturalWidth;
       encodeCanvas.height = firstImg.naturalHeight;
       const ctx = encodeCanvas.getContext('2d')!;
 
-      const stream = encodeCanvas.captureStream(0); // 0 = manual frame control
+      const stream = encodeCanvas.captureStream(OUTPUT_FPS);
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: 5000000,
+        videoBitsPerSecond: 8000000,
       });
 
       const chunks: Blob[] = [];
@@ -187,20 +189,40 @@ export default function VideoExplorer({
         mediaRecorder.start();
 
         (async () => {
-          for (let i = 0; i < restyledFrames.length; i++) {
-            const img = await loadImage(restyledFrames[i]);
-            ctx.drawImage(img, 0, 0, encodeCanvas.width, encodeCanvas.height);
+          // For each pair of consecutive frames, render smooth crossfade
+          // Each transition takes 1/fps seconds at OUTPUT_FPS
+          const framesPerTransition = Math.round(OUTPUT_FPS / fps);
+          const frameDuration = 1000 / OUTPUT_FPS;
 
-            // Request a frame from the stream
-            const track = stream.getVideoTracks()[0] as any;
-            if (track.requestFrame) track.requestFrame();
+          for (let i = 0; i < images.length; i++) {
+            const currentImg = images[i];
+            const nextImg = images[Math.min(i + 1, images.length - 1)];
+            const isLast = i === images.length - 1;
 
-            // Hold each frame for the correct duration
-            await new Promise(r => setTimeout(r, 1000 / fps));
+            // Render intermediate blended frames
+            const steps = isLast ? Math.round(OUTPUT_FPS * 0.5) : framesPerTransition;
+            for (let f = 0; f < steps; f++) {
+              const t = isLast ? 0 : f / steps; // blend factor 0..1
+
+              // Draw current frame
+              ctx.globalAlpha = 1;
+              ctx.drawImage(currentImg, 0, 0, encodeCanvas.width, encodeCanvas.height);
+
+              // Blend in next frame
+              if (!isLast && t > 0) {
+                ctx.globalAlpha = t;
+                ctx.drawImage(nextImg, 0, 0, encodeCanvas.width, encodeCanvas.height);
+              }
+
+              ctx.globalAlpha = 1;
+
+              // Wait for next frame timing
+              await new Promise(r => setTimeout(r, frameDuration));
+            }
           }
 
-          // Hold last frame a bit longer
-          await new Promise(r => setTimeout(r, 500));
+          // Small buffer at the end
+          await new Promise(r => setTimeout(r, 200));
           mediaRecorder.stop();
         })();
       });
