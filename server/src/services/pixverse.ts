@@ -33,23 +33,26 @@ function getApiKey(): string {
   return key;
 }
 
-// Upload video to PixVerse using axios-style multipart
+// Upload video to PixVerse
 export async function uploadToPixVerse(filePath: string): Promise<number> {
-  const FormData = (await import('form-data')).default;
-  const form = new FormData();
-  form.append('file', fs.createReadStream(filePath));
-
   const traceId = randomUUID();
+  const fileName = filePath.split('/').pop() || 'video.mp4';
   console.log(`[PixVerse] Uploading ${filePath}, trace=${traceId}`);
+
+  // Read file as buffer and create a Blob for native FormData
+  const fileBuffer = fs.readFileSync(filePath);
+  const blob = new Blob([fileBuffer], { type: 'video/mp4' });
+
+  const form = new FormData();
+  form.append('file', blob, fileName);
 
   const res = await fetch(`${BASE_URL}/openapi/v2/media/upload`, {
     method: 'POST',
     headers: {
       'API-KEY': getApiKey(),
       'Ai-Trace-Id': traceId,
-      ...form.getHeaders(),
-    } as any,
-    body: form as any,
+    },
+    body: form,
   });
 
   const text = await res.text();
