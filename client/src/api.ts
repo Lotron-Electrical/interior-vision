@@ -2,21 +2,47 @@ import type { DesignStyle, UploadResult, ReconstructionStatus } from './types';
 
 const API_BASE = '/api';
 
-export async function uploadFile(file: File): Promise<UploadResult> {
-  const formData = new FormData();
-  formData.append('file', file);
+export function uploadFile(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<UploadResult> {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('file', file);
 
-  const res = await fetch(`${API_BASE}/upload`, {
-    method: 'POST',
-    body: formData,
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}/upload`);
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+        } else {
+          reject(new Error(data.error || `Upload failed (${xhr.status})`));
+        }
+      } catch {
+        reject(new Error(`Upload failed (${xhr.status}): ${xhr.statusText}`));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Upload failed — file may be too large. Max ~100MB on free tier. Try a smaller file or compress your .splat.'));
+    });
+
+    xhr.addEventListener('timeout', () => {
+      reject(new Error('Upload timed out. Try a smaller file.'));
+    });
+
+    xhr.timeout = 300000; // 5 min timeout
+    xhr.send(formData);
   });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Upload failed');
-  }
-
-  return res.json();
 }
 
 export async function listScenes(): Promise<string[]> {

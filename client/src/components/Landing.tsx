@@ -11,21 +11,40 @@ interface Props {
 
 export default function Landing({ onUpload, existingScenes, onLoadScene, hasGeminiKey }: Props) {
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   async function handleFile(file: File) {
     setError(null);
     setUploading(true);
+    setUploadProgress(0);
+    setFileName(file.name);
+
+    if (file.size > 100 * 1024 * 1024) {
+      setError(`File is ${formatSize(file.size)} — max upload is ~100MB on the free tier. Compress your .splat file or use a smaller video.`);
+      setUploading(false);
+      return;
+    }
 
     try {
-      const result = await uploadFile(file);
+      const result = await uploadFile(file, (percent) => {
+        setUploadProgress(percent);
+      });
       onUpload(result);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setUploading(false);
+      setUploadProgress(0);
+      setFileName(null);
     }
   }
 
@@ -74,20 +93,32 @@ export default function Landing({ onUpload, existingScenes, onLoadScene, hasGemi
               onChange={handleChange}
               style={{ display: 'none' }}
             />
-            <div className="upload-zone__icon">
-              {uploading ? <div className="spinner" /> : '📁'}
-            </div>
-            <div className="upload-zone__text">
-              {uploading
-                ? 'Uploading...'
-                : dragActive
-                  ? 'Drop your file here'
-                  : 'Drag & drop or click to browse'
-              }
-            </div>
-            <div className="upload-zone__formats">
-              Video: MP4, MOV, AVI, WebM &nbsp;|&nbsp; 3D: .splat, .ply, .ksplat
-            </div>
+            {uploading ? (
+              <>
+                <div className="upload-zone__text" style={{ marginBottom: 12 }}>
+                  Uploading {fileName} ({uploadProgress}%)
+                </div>
+                <div className="progress-bar" style={{ maxWidth: 300, margin: '0 auto' }}>
+                  <div
+                    className="progress-bar__fill"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="upload-zone__icon">📁</div>
+                <div className="upload-zone__text">
+                  {dragActive
+                    ? 'Drop your file here'
+                    : 'Drag & drop or click to browse'
+                  }
+                </div>
+                <div className="upload-zone__formats">
+                  Video: MP4, MOV, AVI, WebM &nbsp;|&nbsp; 3D: .splat, .ply, .ksplat &nbsp;|&nbsp; Max ~100MB
+                </div>
+              </>
+            )}
           </div>
 
           {error && <div className="api-warning" style={{ marginTop: 12 }}>{error}</div>}
