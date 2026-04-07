@@ -29,7 +29,11 @@ app.use('/api/reconstruct', reconstructRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', hasGeminiKey: !!process.env.GEMINI_API_KEY });
+  res.json({
+    status: 'ok',
+    hasPixVerseKey: !!process.env.PIXVERSE_API_KEY,
+    hasGeminiKey: !!process.env.GEMINI_API_KEY,
+  });
 });
 
 // SPA fallback
@@ -39,8 +43,8 @@ app.get('*', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Interior Vision server running on http://localhost:${PORT}`);
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn('WARNING: GEMINI_API_KEY not set. Restyle features will not work.');
-    console.warn('Get a key at https://aistudio.google.com/apikey');
+  if (!process.env.PIXVERSE_API_KEY) {
+    console.warn('WARNING: PIXVERSE_API_KEY not set. Video restyle will not work.');
+    console.warn('Get a key at https://platform.pixverse.ai');
   }
 });

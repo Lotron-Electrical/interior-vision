@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { restyleImage, getAvailableStyles } from '../services/gemini';
+import path from 'path';
+import { getAvailableStyles } from '../services/pixverse';
+import { uploadToPixVerse, submitRestyle, getRestyleResult } from '../services/pixverse';
+
+const UPLOADS_DIR = path.resolve(__dirname, '../../../uploads');
 
 export const restyleRouter = Router();
 
@@ -8,12 +12,12 @@ restyleRouter.get('/styles', (_req, res) => {
   res.json({ styles: getAvailableStyles() });
 });
 
-// Restyle a captured view
-restyleRouter.post('/', async (req, res) => {
-  const { imageBase64, mimeType, styleId, customPrompt } = req.body;
+// Submit video restyle via PixVerse
+restyleRouter.post('/video', async (req, res) => {
+  const { filename, styleId, customPrompt } = req.body;
 
-  if (!imageBase64) {
-    res.status(400).json({ error: 'imageBase64 is required' });
+  if (!filename) {
+    res.status(400).json({ error: 'filename is required' });
     return;
   }
   if (!styleId && !customPrompt) {
@@ -21,16 +25,35 @@ restyleRouter.post('/', async (req, res) => {
     return;
   }
 
+  const filePath = path.join(UPLOADS_DIR, filename);
+
   try {
-    const result = await restyleImage(
-      imageBase64,
-      mimeType || 'image/png',
-      styleId,
-      customPrompt
-    );
+    // Upload to PixVerse
+    const mediaId = await uploadToPixVerse(filePath);
+
+    // Submit restyle
+    const { videoId, credits } = await submitRestyle(mediaId, styleId, customPrompt);
+
+    res.json({ videoId, credits, mediaId });
+  } catch (err: any) {
+    console.error('Restyle submit error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Poll restyle status
+restyleRouter.get('/video/status/:videoId', async (req, res) => {
+  const videoId = parseInt(req.params.videoId, 10);
+  if (isNaN(videoId)) {
+    res.status(400).json({ error: 'Invalid videoId' });
+    return;
+  }
+
+  try {
+    const result = await getRestyleResult(videoId);
     res.json(result);
   } catch (err: any) {
-    console.error('Restyle error:', err.message);
+    console.error('Restyle status error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

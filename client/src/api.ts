@@ -83,7 +83,7 @@ export async function restyleView(
   mimeType: string,
   styleId: string
 ): Promise<{ imageBase64: string; mimeType: string }> {
-  const res = await fetch(`${API_BASE}/restyle`, {
+  const res = await fetch(`${API_BASE}/restyle/image`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ imageBase64, mimeType, styleId }),
@@ -97,7 +97,36 @@ export async function restyleView(
   return res.json();
 }
 
-export async function checkHealth(): Promise<{ status: string; hasGeminiKey: boolean }> {
+export async function submitVideoRestyle(
+  filename: string,
+  styleId: string
+): Promise<{ videoId: number; credits: number }> {
+  const res = await fetch(`${API_BASE}/restyle/video`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, styleId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Restyle submission failed');
+  }
+
+  return res.json();
+}
+
+export async function getVideoRestyleStatus(
+  videoId: number
+): Promise<{ status: 'processing' | 'completed' | 'failed'; url?: string; error?: string }> {
+  const res = await fetch(`${API_BASE}/restyle/video/status/${videoId}`);
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Status check failed');
+  }
+  return res.json();
+}
+
+export async function checkHealth(): Promise<{ status: string; hasPixVerseKey: boolean; hasGeminiKey: boolean }> {
   const res = await fetch(`${API_BASE}/health`);
   return res.json();
 }

@@ -161,9 +161,8 @@ export default function Landing({ onUpload, existingScenes, onLoadScene, hasGemi
         {/* API Key Warning */}
         {!hasGeminiKey && (
           <div className="api-warning">
-            Gemini API key not configured. You can explore 3D scenes, but restyling
-            requires a key. Create <code>.env</code> with your <code>GEMINI_API_KEY</code>.
-            Get one free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a>.
+            PixVerse API key not configured. Video restyling requires a key.
+            Get one at <a href="https://platform.pixverse.ai" target="_blank" rel="noopener">platform.pixverse.ai</a>.
           </div>
         )}
       </div>

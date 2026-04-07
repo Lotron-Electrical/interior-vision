@@ -9,6 +9,7 @@ import './App.css';
 
 export default function App() {
   const [view, setView] = useState<AppView>('landing');
+  const [hasPixVerseKey, setHasPixVerseKey] = useState(false);
   const [hasGeminiKey, setHasGeminiKey] = useState(false);
   const [styles, setStyles] = useState<DesignStyle[]>([]);
   const [splatUrl, setSplatUrl] = useState<string | null>(null);
@@ -18,7 +19,10 @@ export default function App() {
   const [existingScenes, setExistingScenes] = useState<string[]>([]);
 
   useEffect(() => {
-    checkHealth().then(h => setHasGeminiKey(h.hasGeminiKey)).catch(() => {});
+    checkHealth().then(h => {
+      setHasPixVerseKey(h.hasPixVerseKey);
+      setHasGeminiKey(h.hasGeminiKey);
+    }).catch(() => {});
     getStyles().then(setStyles).catch(() => {});
     listScenes().then(setExistingScenes).catch(() => {});
   }, []);
@@ -75,14 +79,13 @@ export default function App() {
         />
       )}
 
-      {view === 'video-explorer' && videoUrl && (
+      {view === 'video-explorer' && videoUrl && uploadResult && (
         <VideoExplorer
           videoUrl={videoUrl}
+          filename={uploadResult.filename}
           styles={styles}
-          gallery={gallery}
-          onAddToGallery={handleAddToGallery}
           onBack={handleBackToLanding}
-          hasGeminiKey={hasGeminiKey}
+          hasPixVerseKey={hasPixVerseKey}
         />
       )}
 
