@@ -4,6 +4,7 @@ import { checkHealth, getStyles, listScenes } from './api';
 import Landing from './components/Landing';
 import ProcessingView from './components/ProcessingView';
 import SceneExplorer from './components/SceneExplorer';
+import VideoExplorer from './components/VideoExplorer';
 import './App.css';
 
 export default function App() {
@@ -11,6 +12,7 @@ export default function App() {
   const [hasGeminiKey, setHasGeminiKey] = useState(false);
   const [styles, setStyles] = useState<DesignStyle[]>([]);
   const [splatUrl, setSplatUrl] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [gallery, setGallery] = useState<RestyledImage[]>([]);
   const [existingScenes, setExistingScenes] = useState<string[]>([]);
@@ -28,7 +30,8 @@ export default function App() {
       setSplatUrl(result.path);
       setView('explorer');
     } else {
-      setView('processing');
+      setVideoUrl(result.path);
+      setView('video-explorer');
     }
   }, []);
 
@@ -49,6 +52,7 @@ export default function App() {
   const handleBackToLanding = useCallback(() => {
     setView('landing');
     setSplatUrl(null);
+    setVideoUrl(null);
     setUploadResult(null);
   }, []);
 
@@ -68,6 +72,17 @@ export default function App() {
           uploadResult={uploadResult}
           onComplete={handleReconstructionComplete}
           onBack={handleBackToLanding}
+        />
+      )}
+
+      {view === 'video-explorer' && videoUrl && (
+        <VideoExplorer
+          videoUrl={videoUrl}
+          styles={styles}
+          gallery={gallery}
+          onAddToGallery={handleAddToGallery}
+          onBack={handleBackToLanding}
+          hasGeminiKey={hasGeminiKey}
         />
       )}
 

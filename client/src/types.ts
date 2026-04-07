@@ -28,4 +28,4 @@ export interface RestyledImage {
   timestamp: number;
 }
 
-export type AppView = 'landing' | 'processing' | 'explorer';
+export type AppView = 'landing' | 'processing' | 'explorer' | 'video-explorer';
