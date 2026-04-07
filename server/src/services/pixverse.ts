@@ -1,18 +1,17 @@
 import fs from 'fs';
-import path from 'path';
 import { randomUUID } from 'crypto';
 
 const BASE_URL = 'https://app-api.pixverse.ai';
 
 const STYLE_PROMPTS: Record<string, string> = {
-  contemporary: 'Redesign this interior in Contemporary style. Clean lines, neutral colors with bold accents, modern furniture, polished finishes, statement lighting, open and airy feel.',
-  'french-provincial': 'Redesign this interior in French Provincial style. Soft muted colors, ornate carved furniture, toile and floral fabrics, crystal chandeliers, gilded mirrors, distressed wood, elegant drapery.',
-  scandinavian: 'Redesign this interior in Scandinavian style. White and light wood tones, minimal furniture, organic shapes, wool and linen textiles, hygge cozy elements, plants, functional storage.',
-  'mid-century-modern': 'Redesign this interior in Mid-Century Modern style. Warm teak and walnut wood, iconic furniture with tapered legs, bold geometric patterns, retro mustard and teal colors, Eames chairs.',
-  industrial: 'Redesign this interior in Industrial style. Exposed brick, metal and steel elements, raw wood, Edison bulbs, concrete floors, pipe shelving, leather furniture, dark moody palette.',
-  'japanese-minimalist': 'Redesign this interior in Japanese Minimalist style. Natural bamboo, rice paper, stone, low-profile furniture, neutral earth tones, shoji screens, bonsai plants, intentional negative space.',
-  'art-deco': 'Redesign this interior in Art Deco style. Bold geometric patterns, velvet, marble, brass, jewel tones emerald sapphire gold, sunburst mirrors, lacquered furniture, glamorous lighting.',
-  coastal: 'Redesign this interior in Coastal Hamptons style. White and blue palette, rattan and jute textures, light timber floors, shiplap walls, linen upholstery, nautical accents, relaxed elegance.',
+  contemporary: 'Redesign this interior in Contemporary style with clean lines, neutral colors, modern furniture, polished finishes, statement lighting',
+  'french-provincial': 'Redesign this interior in French Provincial style with soft muted colors, ornate carved furniture, crystal chandeliers, gilded mirrors, elegant drapery',
+  scandinavian: 'Redesign this interior in Scandinavian style with white and light wood tones, minimal furniture, wool textiles, cozy hygge elements, plants',
+  'mid-century-modern': 'Redesign this interior in Mid-Century Modern style with warm teak walnut wood, iconic tapered leg furniture, bold geometric patterns, retro colors',
+  industrial: 'Redesign this interior in Industrial style with exposed brick, metal steel elements, raw wood, Edison bulbs, concrete, leather furniture',
+  'japanese-minimalist': 'Redesign this interior in Japanese Minimalist style with natural bamboo, rice paper, low furniture, neutral earth tones, intentional negative space',
+  'art-deco': 'Redesign this interior in Art Deco style with bold geometric patterns, velvet marble brass, jewel tones, sunburst mirrors, glamorous lighting',
+  coastal: 'Redesign this interior in Coastal Hamptons style with white blue palette, rattan jute textures, light timber, shiplap walls, linen upholstery',
 };
 
 export function getAvailableStyles(): Array<{ id: string; name: string; description: string }> {
@@ -28,37 +27,40 @@ export function getAvailableStyles(): Array<{ id: string; name: string; descript
   ];
 }
 
-function headers(contentType?: string): Record<string, string> {
-  const apiKey = process.env.PIXVERSE_API_KEY;
-  if (!apiKey) throw new Error('PIXVERSE_API_KEY not set');
-
-  const h: Record<string, string> = {
-    'API-KEY': apiKey,
-    'Ai-Trace-Id': randomUUID(),
-  };
-  if (contentType) h['Content-Type'] = contentType;
-  return h;
+function getApiKey(): string {
+  const key = process.env.PIXVERSE_API_KEY;
+  if (!key) throw new Error('PIXVERSE_API_KEY not set');
+  return key;
 }
 
-// Upload video to PixVerse
+// Upload video to PixVerse using axios-style multipart
 export async function uploadToPixVerse(filePath: string): Promise<number> {
   const FormData = (await import('form-data')).default;
   const form = new FormData();
   form.append('file', fs.createReadStream(filePath));
 
+  const traceId = randomUUID();
+  console.log(`[PixVerse] Uploading ${filePath}, trace=${traceId}`);
+
   const res = await fetch(`${BASE_URL}/openapi/v2/media/upload`, {
     method: 'POST',
     headers: {
-      'API-KEY': process.env.PIXVERSE_API_KEY!,
-      'Ai-Trace-Id': randomUUID(),
+      'API-KEY': getApiKey(),
+      'Ai-Trace-Id': traceId,
       ...form.getHeaders(),
     } as any,
     body: form as any,
   });
 
-  const data = await res.json() as any;
+  const text = await res.text();
+  console.log(`[PixVerse] Upload response: ${text.substring(0, 500)}`);
+
+  const data = JSON.parse(text);
   if (data.ErrCode !== 0) throw new Error(data.ErrMsg || 'Upload to PixVerse failed');
-  return data.Resp.media_id;
+
+  const mediaId = data.Resp.media_id;
+  console.log(`[PixVerse] Upload success, media_id=${mediaId} (type: ${typeof mediaId})`);
+  return mediaId;
 }
 
 // Submit restyle job
@@ -70,18 +72,30 @@ export async function submitRestyle(
   const prompt = customPrompt || STYLE_PROMPTS[styleId];
   if (!prompt) throw new Error(`Unknown style: ${styleId}`);
 
-  const body: any = {
-    video_media_id: mediaId,
+  const traceId = randomUUID();
+
+  // Build request body — ensure media_id is an integer
+  const body = {
+    video_media_id: Number(mediaId),
     restyle_prompt: prompt,
   };
 
+  console.log(`[PixVerse] Submitting restyle, trace=${traceId}, body=${JSON.stringify(body)}`);
+
   const res = await fetch(`${BASE_URL}/openapi/v2/video/restyle/generate`, {
     method: 'POST',
-    headers: headers('application/json'),
+    headers: {
+      'API-KEY': getApiKey(),
+      'Ai-Trace-Id': traceId,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(body),
   });
 
-  const data = await res.json() as any;
+  const text = await res.text();
+  console.log(`[PixVerse] Restyle response: ${text.substring(0, 500)}`);
+
+  const data = JSON.parse(text);
   if (data.ErrCode !== 0) throw new Error(data.ErrMsg || 'Restyle submission failed');
   return { videoId: data.Resp.video_id, credits: data.Resp.credits };
 }
@@ -94,33 +108,18 @@ export async function getRestyleResult(videoId: number): Promise<{
 }> {
   const res = await fetch(`${BASE_URL}/openapi/v2/video/result/${videoId}`, {
     method: 'GET',
-    headers: headers(),
+    headers: {
+      'API-KEY': getApiKey(),
+      'Ai-Trace-Id': randomUUID(),
+    },
   });
 
   const data = await res.json() as any;
   if (data.ErrCode !== 0) throw new Error(data.ErrMsg || 'Failed to get result');
 
   const status = data.Resp.status;
-  if (status === 1) {
-    return { status: 'completed', url: data.Resp.url };
-  } else if (status === 7) {
-    return { status: 'failed', error: 'Content moderation failed' };
-  } else if (status === 8) {
-    return { status: 'failed', error: 'Video generation failed' };
-  } else {
-    return { status: 'processing' };
-  }
-}
-
-// Get available PixVerse restyle effects
-export async function getPixVerseStyles(): Promise<any[]> {
-  try {
-    const res = await fetch(`${BASE_URL}/openapi/v2/video/restyle/list?page_num=1&page_size=50`, {
-      method: 'GET',
-      headers: headers(),
-    });
-    const data = await res.json() as any;
-    if (data.ErrCode === 0) return data.Resp || [];
-  } catch {}
-  return [];
+  if (status === 1) return { status: 'completed', url: data.Resp.url };
+  if (status === 7) return { status: 'failed', error: 'Content moderation failed' };
+  if (status === 8) return { status: 'failed', error: 'Video generation failed' };
+  return { status: 'processing' };
 }
